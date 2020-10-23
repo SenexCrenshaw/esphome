@@ -1,11 +1,10 @@
-from __future__ import print_function
-
 import codecs
 
 import logging
 import os
-
-from esphome.py_compat import char_to_byte, text_type, IS_PY2, encode_text
+from pathlib import Path
+from typing import Union
+import tempfile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,24 +17,24 @@ def ensure_unique_string(preferred_string, current_strings):
 
     while test_string in current_strings_set:
         tries += 1
-        test_string = u"{}_{}".format(preferred_string, tries)
+        test_string = f"{preferred_string}_{tries}"
 
     return test_string
 
 
-def indent_all_but_first_and_last(text, padding=u'  '):
+def indent_all_but_first_and_last(text, padding='  '):
     lines = text.splitlines(True)
     if len(lines) <= 2:
         return text
-    return lines[0] + u''.join(padding + line for line in lines[1:-1]) + lines[-1]
+    return lines[0] + ''.join(padding + line for line in lines[1:-1]) + lines[-1]
 
 
-def indent_list(text, padding=u'  '):
+def indent_list(text, padding='  '):
     return [padding + line for line in text.splitlines()]
 
 
-def indent(text, padding=u'  '):
-    return u'\n'.join(indent_list(text, padding))
+def indent(text, padding='  '):
+    return '\n'.join(indent_list(text, padding))
 
 
 # From https://stackoverflow.com/a/14945195/8924614
@@ -43,17 +42,16 @@ def cpp_string_escape(string, encoding='utf-8'):
     def _should_escape(byte):  # type: (int) -> bool
         if not 32 <= byte < 127:
             return True
-        if byte in (char_to_byte('\\'), char_to_byte('"')):
+        if byte in (ord('\\'), ord('"')):
             return True
         return False
 
-    if isinstance(string, text_type):
+    if isinstance(string, str):
         string = string.encode(encoding)
     result = ''
     for character in string:
-        character = char_to_byte(character)
         if _should_escape(character):
-            result += '\\%03o' % character
+            result += f'\\{character:03o}'
         else:
             result += chr(character)
     return '"' + result + '"'
@@ -91,7 +89,7 @@ def mkdir_p(path):
             pass
         else:
             from esphome.core import EsphomeError
-            raise EsphomeError(u"Error creating directories {}: {}".format(path, err))
+            raise EsphomeError(f"Error creating directories {path}: {err}") from err
 
 
 def is_ip_address(host):
@@ -112,13 +110,13 @@ def _resolve_with_zeroconf(host):
 
     try:
         zc = Zeroconf()
-    except Exception:
+    except Exception as err:
         raise EsphomeError("Cannot start mDNS sockets, is this a docker container without "
-                           "host network mode?")
+                           "host network mode?") from err
     try:
         info = zc.resolve_host(host + '.')
     except Exception as err:
-        raise EsphomeError("Error resolving mDNS hostname: {}".format(err))
+        raise EsphomeError(f"Error resolving mDNS hostname: {err}") from err
     finally:
         zc.close()
     if info is None:
@@ -141,10 +139,10 @@ def resolve_ip_address(host):
 
     try:
         return socket.gethostbyname(host)
-    except socket.error as err:
+    except OSError as err:
         errs.append(str(err))
         raise EsphomeError("Error resolving IP address: {}"
-                           "".format(', '.join(errs)))
+                           "".format(', '.join(errs))) from err
 
 
 def get_bool_env(var, default=False):
@@ -167,32 +165,35 @@ def read_file(path):
             return f_handle.read()
     except OSError as err:
         from esphome.core import EsphomeError
-        raise EsphomeError(u"Error reading file {}: {}".format(path, err))
+        raise EsphomeError(f"Error reading file {path}: {err}") from err
     except UnicodeDecodeError as err:
         from esphome.core import EsphomeError
-        raise EsphomeError(u"Error reading file {}: {}".format(path, err))
+        raise EsphomeError(f"Error reading file {path}: {err}") from err
 
 
-def _write_file(path, text):
-    import tempfile
-    directory = os.path.dirname(path)
-    mkdir_p(directory)
+def _write_file(path: Union[Path, str], text: Union[str, bytes]):
+    """Atomically writes `text` to the given path.
+
+    Automatically creates all parent directories.
+    """
+    if not isinstance(path, Path):
+        path = Path(path)
+    data = text
+    if isinstance(text, str):
+        data = text.encode()
+
+    directory = path.parent
+    directory.mkdir(exist_ok=True, parents=True)
 
     tmp_path = None
-    data = encode_text(text)
     try:
         with tempfile.NamedTemporaryFile(mode="wb", dir=directory, delete=False) as f_handle:
             tmp_path = f_handle.name
             f_handle.write(data)
         # Newer tempfile implementations create the file with mode 0o600
         os.chmod(tmp_path, 0o644)
-        if IS_PY2:
-            if os.path.exists(path):
-                os.remove(path)
-            os.rename(tmp_path, path)
-        else:
-            # If destination exists, will be overwritten
-            os.replace(tmp_path, path)
+        # If destination exists, will be overwritten
+        os.replace(tmp_path, path)
     finally:
         if tmp_path is not None and os.path.exists(tmp_path):
             try:
@@ -201,17 +202,20 @@ def _write_file(path, text):
                 _LOGGER.error("Write file cleanup failed: %s", err)
 
 
-def write_file(path, text):
+def write_file(path: Union[Path, str], text: str):
     try:
         _write_file(path, text)
-    except OSError:
+    except OSError as err:
         from esphome.core import EsphomeError
-        raise EsphomeError(u"Could not write file at {}".format(path))
+        raise EsphomeError(f"Could not write file at {path}") from err
 
 
-def write_file_if_changed(path, text):
+def write_file_if_changed(path: Union[Path, str], text: str):
+    if not isinstance(path, Path):
+        path = Path(path)
+
     src_content = None
-    if os.path.isfile(path):
+    if path.is_file():
         src_content = read_file(path)
     if src_content != text:
         write_file(path, text)
@@ -226,7 +230,7 @@ def copy_file_if_changed(src, dst):
         shutil.copy(src, dst)
     except OSError as err:
         from esphome.core import EsphomeError
-        raise EsphomeError(u"Error copying file {} to {}: {}".format(src, dst, err))
+        raise EsphomeError(f"Error copying file {src} to {dst}: {err}") from err
 
 
 def list_starts_with(list_, sub):
@@ -266,16 +270,12 @@ def file_compare(path1, path2):
 # A dict of types that need to be converted to heaptypes before a class can be added
 # to the object
 _TYPE_OVERLOADS = {
-    int: type('int', (int,), dict()),
-    float: type('float', (float,), dict()),
-    str: type('str', (str,), dict()),
-    dict: type('dict', (str,), dict()),
-    list: type('list', (list,), dict()),
+    int: type('EInt', (int,), dict()),
+    float: type('EFloat', (float,), dict()),
+    str: type('EStr', (str,), dict()),
+    dict: type('EDict', (str,), dict()),
+    list: type('EList', (list,), dict()),
 }
-
-if IS_PY2:
-    _TYPE_OVERLOADS[long] = type('long', (long,), dict())
-    _TYPE_OVERLOADS[unicode] = type('unicode', (unicode,), dict())
 
 # cache created classes here
 _CLASS_LOOKUP = {}
