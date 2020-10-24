@@ -500,4 +500,3 @@ void ST7735::spi_master_write_color_(uint16_t color, uint16_t size) {
 
 }  // namespace st7735
 }  // namespace esphome
-
