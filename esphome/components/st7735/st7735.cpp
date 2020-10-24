@@ -216,14 +216,8 @@ static const uint8_t PROGMEM
     ST77XX_DISPON,    ST_CMD_DELAY, //  4: Main screen turn on, no args w/delay
       100 };                        //     100 ms delay
 
-// clang-format on
-static const char *TAG = "st7735";
-
-// Helper to scale between color spaces
-inline static uint8_t scale8(uint8_t i, uint8_t scale) { return (uint16_t(i) * (1 + uint16_t(scale))) / 256; }
-
-// Pre-computed lookup table for fast RGB332 to RGB565 color space
-const uint16_t RGB332_TO_565_LOOKUP_TABLE[256] = {
+  // Pre-computed lookup table for fast RGB332 to RGB565 color space
+  static constexpr uint16_t RGB332_TO_565_LOOKUP_TABLE[256] = {
     0x0000, 0x000a, 0x0015, 0x001f, 0x0120, 0x012a, 0x0135, 0x013f, 0x0240, 0x024a, 0x0255, 0x025f, 0x0360, 0x036a,
     0x0375, 0x037f, 0x0480, 0x048a, 0x0495, 0x049f, 0x05a0, 0x05aa, 0x05b5, 0x05bf, 0x06c0, 0x06ca, 0x06d5, 0x06df,
     0x07e0, 0x07ea, 0x07f5, 0x07ff, 0x2000, 0x200a, 0x2015, 0x201f, 0x2120, 0x212a, 0x2135, 0x213f, 0x2240, 0x224a,
@@ -243,6 +237,9 @@ const uint16_t RGB332_TO_565_LOOKUP_TABLE[256] = {
     0xf800, 0xf80a, 0xf815, 0xf81f, 0xf920, 0xf92a, 0xf935, 0xf93f, 0xfa40, 0xfa4a, 0xfa55, 0xfa5f, 0xfb60, 0xfb6a,
     0xfb75, 0xfb7f, 0xfc80, 0xfc8a, 0xfc95, 0xfc9f, 0xfda0, 0xfdaa, 0xfdb5, 0xfdbf, 0xfec0, 0xfeca, 0xfed5, 0xfedf,
     0xffe0, 0xffea, 0xfff5, 0xffff};
+
+// clang-format on
+static const char *TAG = "st7735";
 
 ST7735::ST7735(ST7735Model model, int width, int height, int colstart, int rowstart, boolean eightbitcolor) {
   model_ = model;
@@ -325,8 +322,8 @@ void HOT ST7735::draw_absolute_pixel_internal(int x, int y, Color color) {
     return;
 
   if (this->eightbitcolor_) {
-    // 8-Bit color space is in BGR332, and has to be calculated by hand
-    const uint8_t color332 = (scale8(color.blue, 7) << 5) | (scale8(color.green, 7) << 2) | (scale8(color.red, 3) << 0);
+    // 8-Bit color space is in BGR332
+    const uint32_t color332 = color.to_rgb_332();
     uint16_t pos = (x + y * this->get_width_internal());
     this->buffer_[pos++] = color332;
   } else {
@@ -474,6 +471,7 @@ void HOT ST7735::write_display_data_() {
   } else {
     this->write_array(this->buffer_, this->get_buffer_length());
   }
+
   this->disable();
 }
 
@@ -502,3 +500,4 @@ void ST7735::spi_master_write_color_(uint16_t color, uint16_t size) {
 
 }  // namespace st7735
 }  // namespace esphome
+
