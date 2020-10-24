@@ -323,9 +323,9 @@ void HOT ST7735::draw_absolute_pixel_internal(int x, int y, Color color) {
 
   if (this->eightbitcolor_) {
     // 8-Bit color space is in BGR332
-    const uint32_t color332 = color.to_rgb_332();
+    const uint8_t color332 = color.to_bgr_332();
     uint16_t pos = (x + y * this->get_width_internal());
-    this->buffer_[pos++] = color332;
+    this->buffer_[pos] = color332;
   } else {
     // 16-bit color-space is in BGR565
     const uint32_t color565 = color.to_bgr_565();
