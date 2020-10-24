@@ -220,10 +220,10 @@ static const uint8_t PROGMEM
 static const char *TAG = "st7735";
 
 // Helper to scale between color spaces
-inline static uint8_t esp_scale8(uint8_t i, uint8_t scale) { return (uint16_t(i) * (1 + uint16_t(scale))) / 256; }
+inline static uint8_t scale8(uint8_t i, uint8_t scale) { return (uint16_t(i) * (1 + uint16_t(scale))) / 256; }
 
 // Pre-computed lookup table for fast RGB332 to RGB565 color space
-const uint16_t RGB332to565lookupTable[256] = {
+const uint16_t RGB332_TO_565_LOOKUP_TABLE[256] = {
     0x0000, 0x000a, 0x0015, 0x001f, 0x0120, 0x012a, 0x0135, 0x013f, 
     0x0240, 0x024a, 0x0255, 0x025f, 0x0360, 0x036a, 0x0375, 0x037f, 
     0x0480, 0x048a, 0x0495, 0x049f, 0x05a0, 0x05aa, 0x05b5, 0x05bf, 
@@ -341,7 +341,7 @@ void HOT ST7735::draw_absolute_pixel_internal(int x, int y, Color color) {
 
   if (this->eightbitcolor_) {
     //8-Bit color space is in BGR332, and has to be calculated by hand
-    const uint8_t color332  = (esp_scale8(color.blue, 7) << 5) | (esp_scale8(color.green, 7) << 2) | (esp_scale8(color.red, 3) << 0);
+    const uint8_t color332  = (scale8(color.blue, 7) << 5) | (scale8(color.green, 7) << 2) | (scale8(color.red, 3) << 0);
     uint16_t pos = (x + y * this->get_width_internal());
     this->buffer_[pos++] = color332;
   } else {
@@ -480,7 +480,7 @@ void HOT ST7735::write_display_data_() {
     // Because this method is called every time the display refreshes, we have to be performant, hence a precomputed lookup table is used here.
     for (int line = 0; line < this->get_buffer_length(); line = line + this->get_width_internal()) {
       for (int index = 0; index < this->get_width_internal(); ++index) {
-        auto color = RGB332to565lookupTable[this->buffer_[index + line]];
+        auto color = RGB332_TO_565_LOOKUP_TABLE[this->buffer_[index + line]];
         this->write_byte((color >> 8) & 0xff);
         this->write_byte(color & 0xff);
       }
