@@ -463,7 +463,7 @@ void HOT ST7735::write_display_data_() {
     // performant, hence a precomputed lookup table is used here.
     for (int line = 0; line < this->get_buffer_length(); line = line + this->get_width_internal()) {
       for (int index = 0; index < this->get_width_internal(); ++index) {
-        auto color = RGB332_TO_565_LOOKUP_TABLE[this->buffer_[index + line]];
+        auto color = BGR332_TO_565_LOOKUP_TABLE[this->buffer_[index + line]];
         this->write_byte((color >> 8) & 0xff);
         this->write_byte(color & 0xff);
       }
