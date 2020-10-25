@@ -216,8 +216,8 @@ static const uint8_t PROGMEM
     ST77XX_DISPON,    ST_CMD_DELAY, //  4: Main screen turn on, no args w/delay
       100 };                        //     100 ms delay
 
-  // Pre-computed lookup table for fast BGR332 to BGR565 color space
-  static constexpr uint16_t BGR332_TO_565_LOOKUP_TABLE[256] = {
+  // Pre-computed lookup table for fast RGB332 to RGB565 color space
+  static constexpr uint16_t RGB332_TO_565_LOOKUP_TABLE[256] = {
     0x0000, 0x000a, 0x0015, 0x001f, 0x0120, 0x012a, 0x0135, 0x013f, 0x0240, 0x024a, 0x0255, 0x025f, 0x0360, 0x036a,
     0x0375, 0x037f, 0x0480, 0x048a, 0x0495, 0x049f, 0x05a0, 0x05aa, 0x05b5, 0x05bf, 0x06c0, 0x06ca, 0x06d5, 0x06df,
     0x07e0, 0x07ea, 0x07f5, 0x07ff, 0x2000, 0x200a, 0x2015, 0x201f, 0x2120, 0x212a, 0x2135, 0x213f, 0x2240, 0x224a,
@@ -291,10 +291,10 @@ void ST7735::setup() {
   }
   display_init_(RCMD3);
 
-  // Black tab, change MADCTL color filter
+  // Black tab and MINI, change MADCTL color filter
   if ((this->model_ == INITR_BLACKTAB) || (this->model_ == INITR_MINI_160X80)) {
-    uint8_t data = 0xC0;
-    sendcommand_(ST77XX_MADCTL, &data, 1);
+     uint8_t data = ST7735_MADCTL_BGR | ST77XX_MADCTL_MX | ST77XX_MADCTL_MY | ST77XX_MADCTL_ML;
+     sendcommand_(ST77XX_MADCTL, &data, 1);
   }
 
   this->init_internal_(this->get_buffer_length());
@@ -322,13 +322,13 @@ void HOT ST7735::draw_absolute_pixel_internal(int x, int y, Color color) {
     return;
 
   if (this->eightbitcolor_) {
-    // 8-Bit color-space is in BGR332
-    const uint8_t color332 = color.to_bgr_332();
+    // 8-Bit color-space
+    const uint8_t color332 = color.to_rgb_332();
     uint16_t pos = (x + y * this->get_width_internal());
     this->buffer_[pos] = color332;
   } else {
-    // 16-bit color-space is in BGR565
-    const uint32_t color565 = color.to_bgr_565();
+    // 16-bit color-space
+    const uint32_t color565 = color.to_rgb_565();
     uint16_t pos = (x + y * this->get_width_internal()) * 2;
     this->buffer_[pos++] = (color565 >> 8) & 0xff;
     this->buffer_[pos] = color565 & 0xff;
@@ -458,12 +458,12 @@ void HOT ST7735::write_display_data_() {
   this->dc_pin_->digital_write(true);
 
   if (this->eightbitcolor_) {
-    // In 8-bit color mode (BGR332) we can't just write the array, but have to convert the 8-bit colorspace buffer back
-    // to BGR565 16-bit colorspace. Because this method is called every time the display refreshes, we have to be
+    // In 8-bit color mode we can't just write the array, but have to convert the 8-bit colorspace buffer back
+    // to RGB565 16-bit colorspace. Because this method is called every time the display refreshes, we have to be
     // performant, hence a precomputed lookup table is used here.
     for (int line = 0; line < this->get_buffer_length(); line = line + this->get_width_internal()) {
       for (int index = 0; index < this->get_width_internal(); ++index) {
-        auto color = BGR332_TO_565_LOOKUP_TABLE[this->buffer_[index + line]];
+        auto color = RGB332_TO_565_LOOKUP_TABLE[this->buffer_[index + line]];
         this->write_byte((color >> 8) & 0xff);
         this->write_byte(color & 0xff);
       }
