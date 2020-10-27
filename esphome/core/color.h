@@ -171,6 +171,23 @@ struct Color {
     return (uint16_t)(blue | green | red);
   }
   
+  static uint32_t rgb_332to_rgb_565(uint8_t rgb332) {
+    uint16_t red, green, blue;
+
+    red = (rgb332 & 0xe0) >> 5;  // rgb332 3 red bits now right justified
+    red = esp_scale(red, 7, 31);
+    red = red << 11;  // red bits now 5 MSB bits
+
+    green = (rgb332 & 0x1c) >> 2;  // rgb332 3 green bits now right justified
+    green = esp_scale(green, 7, 63);
+    green = green << 5;  // green bits now 6 "middle" bits
+
+    blue = rgb332 & 0x03;  // rgb332 2 blue bits are right justified
+    blue = esp_scale(blue, 3, 31);
+
+    return (uint16_t)(red | green | blue);
+  }  
+  
   uint32_t to_rgb_565() const {
     uint32_t color565 =
         (esp_scale8(this->red, 31) << 11) | (esp_scale8(this->green, 63) << 5) | (esp_scale8(this->blue, 31) << 0);
